@@ -20,7 +20,7 @@ def load(image_path):
 
     ### YOUR CODE HERE
     # Use skimage io.imread
-    pass
+    out = io.imread(image_path)
     ### END YOUR CODE
 
     # Let's convert the image to be between the correct range.
@@ -45,7 +45,7 @@ def crop_image(image, start_row, start_col, num_rows, num_cols):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = image[start_row:start_row + num_rows, start_col:start_col + num_cols, :]
     ### END YOUR CODE
 
     return out
@@ -68,7 +68,7 @@ def dim_image(image):
     out = None
 
     ### YOUR CODE HERE
-    pass
+    out = (image ** 2) * 0.5
     ### END YOUR CODE
 
     return out
@@ -96,7 +96,13 @@ def resize_image(input_image, output_rows, output_cols):
     #    > This should require two nested for loops!
 
     ### YOUR CODE HERE
-    pass
+    row_scale_factor = float(input_rows) / output_rows
+    col_scale_factor = float(input_cols) / output_cols
+    
+    for i in range(output_rows):
+        for j in range(output_cols):
+            output_image[i, j, :] = input_image[int(i * row_scale_factor), int(j * col_scale_factor), :]
+            
     ### END YOUR CODE
 
     # 3. Return the output image
@@ -119,7 +125,7 @@ def rotate2d(point, theta):
     # Reminder: np.cos() and np.sin() will be useful here!
 
     ## YOUR CODE HERE
-    pass
+    return np.array([point[0] * np.cos(theta) - point[1] * np.sin(theta), point[0] * np.sin(theta) + point[1] * np.cos(theta)])
     ### END YOUR CODE
 
 
@@ -133,6 +139,10 @@ def rotate_image(input_image, theta):
 
     Returns:
         (np.ndarray): Rotated image, with the same shape as the input.
+    
+    - We recommend basing your code off your `resize_image()` implementation, and applying the same general approach as before. Iterate over each pixel of an output image `(i, j)`, then fill in a color from a corresponding input pixel `(input_i, input_j)`. In this case, note that the output and input images should be the same size.
+    - If you run into an output pixel whose corresponding input coordinates `input_i` and `input_j` that are invalid, you can just ignore that pixel or set it to black.
+    - In our expected output above, we're rotating each coordinate around the center of the image, not the origin. (the origin is located at the top left)
     """
     input_rows, input_cols, channels = input_image.shape
     assert channels == 3
@@ -141,7 +151,13 @@ def rotate_image(input_image, theta):
     output_image = np.zeros_like(input_image)
 
     ## YOUR CODE HERE
-    pass
+    center = np.array([input_rows / 2, input_cols / 2])
+    
+    for i in range(input_rows):
+        for j in range(input_cols):
+            rotated = rotate2d(np.array([i - center[0], j - center[1]]), theta) + center
+            if rotated[0] >= 0 and rotated[0] < input_rows and rotated[1] >= 0 and rotated[1] < input_cols:
+                output_image[i, j, :] = input_image[int(rotated[0]), int(rotated[1]), :]
     ### END YOUR CODE
 
     # 3. Return the output image
