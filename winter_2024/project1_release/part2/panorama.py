@@ -46,13 +46,17 @@ def harris_corners(img, window_size=3, k=0.04):
     ### YOUR CODE HERE
     pass
     # 2. Compute products of derivatives (I_x^2, I_y^2, I_xy) at each pixel
-    
+    Ixx = convolve(dx ** 2, window)
+    Ixy = convolve(dx * dy, window)
+    Iyy = convolve(dy ** 2, window)
     
     # 3. Compute matrix M at each pixel
-    
-
-    # 4. Compute corner response R=Det(M) - k*(Trace(M)^2) at each pixel
-    
+    for i in range(H):
+        for j in range(W):
+            M = np.array([[Ixx[i, j], Ixy[i, j]], [Ixy[i, j], Iyy[i, j]]])
+            
+            # 4. Compute corner response R=Det(M) - k*(Trace(M)^2) at each pixel
+            response[i, j] = np.linalg.det(M) - k * np.trace(M) ** 2
     
     ### END YOUR CODE
 
@@ -79,7 +83,10 @@ def simple_descriptor(patch):
     """
     feature = []
     ### YOUR CODE HERE
-    pass
+    if patch.std() == 0:
+        feature = (patch - patch.mean()).flatten()
+    else:
+        feature = ((patch - patch.mean()) / patch.std()).flatten()
     ### END YOUR CODE
     return feature
 
@@ -134,7 +141,13 @@ def match_descriptors(desc1, desc2, threshold=0.5):
     dists = cdist(desc1, desc2)
 
     ### YOUR CODE HERE
-    pass
+    for i in range(len(desc1)):
+        dist = dists[i,:]
+        sorted = np.sort(dist)
+        if (sorted[0] / sorted[1]) <= threshold:
+            matches.append([i, np.argmin(dist)])
+
+    matches = np.array(matches).reshape(-1, 2)
     ### END YOUR CODE
 
     return matches
@@ -167,7 +180,8 @@ def fit_affine_matrix(p1, p2):
     p2 = pad(p2)
 
     ### YOUR CODE HERE
-    pass
+    H = np.linalg.lstsq(p2, p1, rcond=None)
+    H = H[0]
     ### END YOUR CODE
 
     # Sometimes numerical issues cause least-squares to produce the last
@@ -238,7 +252,18 @@ def ransac(keypoints1, keypoints2, matches, n_iters=200, threshold=20):
         sample2 = pad(keypoints2[samples[:,1]])
     
     ### YOUR CODE HERE
-    pass
+        H = np.linalg.lstsq(sample2, sample1, rcond=None)[0]
+        H[:, 2] = np.array([0, 0, 1])
+        
+        inliers = np.linalg.norm(matched2.dot(H) - matched1, axis=1) ** 2 < threshold
+        curr_n = np.sum(inliers)
+
+        if curr_n > n_inliers:
+            max_inliers = inliers.copy()
+            n_inliers = curr_n
+    
+    H = np.linalg.lstsq(matched2[max_inliers], matched1[max_inliers], rcond=None)[0]
+    H[:,2] = np.array([0, 0, 1])
     ### END YOUR CODE
     return H, orig_matches[max_inliers]
 
@@ -273,7 +298,17 @@ def linear_blend(img1_warped, img2_warped):
     left_margin = np.argmax(img2_mask[out_H//2, :].reshape(1, out_W), 1)[0]
 
     ### YOUR CODE HERE
-    pass
+    # 2. Define a weight matrices for img1_warped and img2_warped
+    #     np.linspace and np.tile functions will be useful
+    weight = np.zeros(out_W)
+    weight[:left_margin] = 1
+    weight[left_margin:right_margin] = np.linspace(1, 0, right_margin - left_margin)
+    
+    
+    # 3. Apply the weight matrices to their corresponding images
+    merged = (img1_warped * img1_mask * weight) + (img2_warped * img2_mask * (1 - weight))
+    
+    # 4. Combine the images
     ### END YOUR CODE
 
     return merged
@@ -314,9 +349,22 @@ def stitch_multiple_images(imgs, desc_func=simple_descriptor, patch_size=5):
         matches.append(mtchs)
 
     ### YOUR CODE HERE
-    pass
+    H_mats = [np.eye(3)]
+    for i in range(len(imgs) - 1):
+        H_mats.append(ransac(keypoints[i], keypoints[i + 1], matches[i], threshold=1)[0])
+        
+    for i in range(len(imgs) - 1):
+        H_mats[i + 1] = H_mats[i + 1].dot(H_mats[i])
+        
+    output_shape, offset = get_output_space(imgs[0], imgs[1:], H_mats[1:])
+    
+    panorama = np.zeros(output_shape)
+    for i, img in enumerate(imgs):
+        warped_img = warp_image(img, H_mats[i], output_shape, offset)
+        mask = (warped_img != -1)
+        warped_img[~mask] = 0
+        panorama = warped_img if i == 0 else linear_blend(panorama, warped_img)
     ### END YOUR CODE
 
     return panorama
-
 
